@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SS Enterprise Portal</title>
+<script>
+  // Single source of truth for cache-busting - bump this whenever any js/css file changes, so browsers
+  // don't keep serving a stale cached copy after a deploy. (Previously the stylesheet had its own separate
+  // version string that went stale for several rounds of CSS edits - now everything shares this one.)
+  const ASSET_V = '2026092926';
+  document.write('<link rel="stylesheet" href="css/app.css?v=' + ASSET_V + '">');
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<section id="login" class="login hidden">
+  <form class="login-card" id="loginForm" autocomplete="off">
+    <div class="brand"><span class="logo">SS</span><div><b>SS Enterprise</b><small>Store management portal</small></div></div>
+    <h1>Sign in</h1>
+    <p class="muted">Sign in with your portal user (<code>TB_User</code>).</p>
+    <label>Username<input id="lu" required autofocus></label>
+    <label>Password<input id="lp" type="password" required></label>
+    <div class="err" id="lerr"></div>
+    <button class="btn primary block" type="submit" id="loginBtn"><span class="spinner" aria-hidden="true"></span><span class="lbl">Sign in</span></button>
+  </form>
+</section>
+
+<div id="shell" class="shell hidden">
+  <aside class="side" id="side">
+    <div class="brand"><span class="logo">SS</span><div><b>SS Enterprise</b><small>Singur Bigmart</small></div></div>
+    <nav id="nav">
+      <a href="#/dashboard" data-r="dashboard"><i>&#9636;</i>Dashboard</a>
+      <a href="#/sales" data-r="sales"><i>&#8377;</i>Sales</a>
+      <a href="#/trend" data-r="trend"><i>&#8599;</i>Sales by month</a>
+      <a href="#/vendors" data-r="vendors"><i>&#9874;</i>Vendor payments</a>
+      <a href="#/cheques" data-r="cheques"><i>&#10003;</i>Cheque details</a>
+      <a href="#/expenses" data-r="expenses"><i>&#8722;</i>Expenses</a>
+      <a href="#/products" data-r="products"><i>&#9737;</i>Products</a>
+      <a href="#/todos" data-r="todos"><i>&#9745;</i>To-do</a>
+    </nav>
+    <div class="side-foot"><small>&copy; All rights reserved, Baidurya IT Services</small></div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button class="btn ghost menu" id="menuBtn" aria-label="Menu">&#9776;</button>
+      <h2 id="pageTitle"></h2>
+      <div class="top-r">
+        <button class="btn ghost" id="themeBtn" title="Toggle theme">&#9680;</button>
+        <span class="user" id="userName"></span>
+        <button class="btn ghost" id="logoutBtn">Sign out</button>
+      </div>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+
+<div id="modal" class="modal hidden"><div class="modal-card" id="modalCard"></div></div>
+<div id="toast" class="toast"></div>
+
+<script>
+  // Live API by default; add ?mock=1 to run against the bundled sample data instead.
+  const mock = new URLSearchParams(location.search).has('mock');
+  const load = src => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src + '?v=' + ASSET_V; s.onload = ok; s.onerror = no; document.body.appendChild(s); });
+  (mock ? load('js/mockdata.js').then(() => load('js/data.mock.js')) : load('js/data.js')).then(() => load('js/app.js'));
+</script>
+</body>
+</html>
