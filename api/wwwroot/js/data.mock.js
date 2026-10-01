@@ -130,6 +130,7 @@
       return tick({ sale: s, items: lines.filter(l => l.SaleID === id) });
     },
 
+    report: () => Promise.reject(new Error('Reports need the real API')),
     vendors: () => tick(vendorStats()),
     vendorCheques() {
       const supplierName = byId(M.TB_Supplier, 'ID');

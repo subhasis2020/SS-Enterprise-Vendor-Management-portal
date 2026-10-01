@@ -808,14 +808,62 @@
         ${p.stockSamples.map(r => `<tr><td class="wrap">${esc(r.Name)}</td><td class="num">${r.dbStock}</td><td class="num">${r.fileStock}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">None</td></tr>'}</tbody></table></div></div>`;
   }
 
+
+  /* ---------- reports (owner-only; the server enforces this too) ---------- */
+  // Column type: 1 = rupees, 2 = count, 3 = date, 4 = percent, none = text.
+  const REPORTS = {
+    'vendor-ageing': { title: 'Vendor ageing', range: false, note: 'Unpaid invoices by age (payments applied oldest-first).',
+      cols: [['Vendor', 'Vendor'], ['0–30 days', 'D0_30', 1], ['30–60 days', 'D30_60', 1], ['60–90 days', 'D60_90', 1], ['90+ days', 'D90', 1], ['Overdue', 'Overdue', 1], ['Total due', 'Total', 1]] },
+    'vendor-payments': { title: 'Vendor payments', range: true, days: 30, note: 'Payments per vendor. Cheques count on their cheque date.',
+      cols: [['Vendor', 'Vendor'], ['Payments', 'Payments', 2], ['Cash', 'Cash', 1], ['Cheque', 'Cheque', 1], ['Other', 'Other', 1], ['Total', 'Total', 1]] },
+    'cheque-register': { title: 'Cheque register', range: true, days: 30, note: 'Every cheque by cheque date; upcoming ones are dated after today.',
+      cols: [['Cheque date', 'ChequeDate', 3], ['Vendor', 'Vendor'], ['Cheque no.', 'ChequeNo'], ['Entered on', 'EntryDate', 3], ['Status', 'Status'], ['Amount', 'Amount', 1]] },
+    'price-mismatch': { title: 'Price mismatch bills', range: true, days: 30, note: 'Bills where a line was charged at a price different from the POS price.',
+      cols: [['Bill no.', 'SaleID'], ['Date', 'SaleDate', 3], ['Lines', 'Lines', 2], ['Difference (Actual − POS)', 'Difference', 1]] },
+    'profit-by-bill': { title: 'Profit by bill', range: true, days: 7, note: 'Per bill: POS price × qty minus purchase price × qty. Newest 5,000 bills in the range. Lines with no purchase price count as zero cost.',
+      cols: [['Bill no.', 'SaleID'], ['Date', 'SaleDate', 3], ['Qty', 'Qty', 2], ['Sales', 'Sales', 1], ['Cost', 'Cost', 1], ['Profit', 'Profit', 1], ['Margin', 'Margin', 4]] },
+    'profit-daily': { title: 'Profit by day', range: true, days: 30, note: 'Daily sales, cost and profit (same basis as Monthly profit).',
+      cols: [['Date', 'Day', 3], ['Bills', 'Bills', 2], ['Qty', 'Qty', 2], ['Sales', 'Sales', 1], ['Cost', 'Cost', 1], ['Profit', 'Profit', 1], ['Margin', 'Margin', 4]] },
+    'profit-monthly': { title: 'Profit by month', range: true, days: 365, note: 'Monthly sales, cost and profit for the range (months at the edges are partial).',
+      cols: [['Month', 'Month'], ['Bills', 'Bills', 2], ['Qty', 'Qty', 2], ['Sales', 'Sales', 1], ['Cost', 'Cost', 1], ['Profit', 'Profit', 1], ['Margin', 'Margin', 4]] }
+  };
+  const daysAgo = n => { const d = new Date(Api.TODAY + 'T00:00'); d.setDate(d.getDate() - n + 1); return d.toLocaleDateString('en-CA'); };
+  pages.reports = async () => {
+    const st = pages.reports.st = pages.reports.st || { key: 'vendor-ageing', from: daysAgo(30), to: Api.TODAY };
+    const R = REPORTS[st.key];
+    const rows = await Api.report(st.key, st.from, st.to);
+    const cell = (c, r) => {
+      const v = r[c[1]];
+      return c[2] === 1 ? `<td class="num">${v ? inr2(v) : '—'}</td>` : c[2] === 2 ? `<td class="num">${num(v)}</td>` : c[2] === 3 ? `<td>${fmtDate(v)}</td>` : c[2] === 4 ? `<td class="num">${(+v || 0).toFixed(1)}%</td>` : `<td class="wrap">${esc(v ?? '—')}</td>`;
+    };
+    const sum = k => rows.reduce((s, r) => s + (+r[k] || 0), 0);
+    const totals = rows.length ? `<tr>${R.cols.map((c, i) => i === 0 ? `<td><b>Total (${rows.length})</b></td>`
+      : c[2] === 1 ? `<td class="num"><b>${inr2(sum(c[1]))}</b></td>` : c[2] === 2 ? `<td class="num"><b>${num(sum(c[1]))}</b></td>`
+      : c[2] === 4 ? `<td class="num"><b>${sum('Sales') > 0 ? (sum('Profit') / sum('Sales') * 100).toFixed(1) : '0.0'}%</b></td>` : '<td></td>').join('')}</tr>` : '';
+    $('#view').innerHTML = `
+      <div class="toolbar">
+        <label>Report<select id="rk">${Object.entries(REPORTS).map(([k, v]) => `<option value="${k}" ${k === st.key ? 'selected' : ''}>${v.title}</option>`).join('')}</select></label>
+        ${R.range ? `<label>From<input type="date" id="rf" value="${st.from}"></label><label>To<input type="date" id="rt" value="${st.to}"></label>` : ''}
+        <div class="end"><button class="btn" id="rx">Export CSV</button></div>
+      </div>
+      <div class="card"><div class="sub">${R.note}</div><div class="table-wrap"><table><thead><tr>${R.cols.map(c => `<th${c[2] === 1 || c[2] === 2 || c[2] === 4 ? ' class="num"' : ''}>${c[0]}</th>`).join('')}</tr></thead><tbody>
+      ${rows.map(r => `<tr>${R.cols.map(c => cell(c, r)).join('')}</tr>`).join('') || `<tr><td colspan="${R.cols.length}" class="muted">Nothing to report for this selection.</td></tr>`}
+      ${totals}</tbody></table></div></div>`;
+    $('#rk').onchange = e => { st.key = e.target.value; st.to = Api.TODAY; st.from = daysAgo(REPORTS[st.key].days || 30); pages.reports(); };
+    if (R.range) { $('#rf').onchange = e => { st.from = e.target.value || st.from; pages.reports(); }; $('#rt').onchange = e => { st.to = e.target.value || st.to; pages.reports(); }; }
+    $('#rx').onclick = () => download(st.key + '.csv', [R.cols.map(c => c[0]), ...rows.map(r => R.cols.map(c => r[c[1]]))]);
+  };
+
   /* ---------- router / auth ---------- */
-  const titles = { dashboard: 'Dashboard', todos: 'To-do', sales: 'Sales', trend: 'Sales by month', vendors: 'Vendor payments', cheques: 'Cheque details', customers: 'Customer credit', expenses: 'Expenses', products: 'Products', sync: 'Product sync', profit: 'Monthly profit' };
+  const titles = { dashboard: 'Dashboard', todos: 'To-do', sales: 'Sales', trend: 'Sales by month', vendors: 'Vendor payments', cheques: 'Cheque details', customers: 'Customer credit', expenses: 'Expenses', products: 'Products', sync: 'Product sync', profit: 'Monthly profit', reports: 'Reports' };
   let navId = 0;
   function route() {
     if (!sessionStorage.getItem('user')) return showLogin();
     const myNav = ++navId;
     const [r, id] = (location.hash.replace(/^#\//, '') || 'dashboard').split('/');
-    const name = pages[r] ? r : 'dashboard';
+    const canReports = sessionStorage.getItem('reports') === '1';
+    $('#navReports').classList.toggle('hidden', !canReports);
+    const name = pages[r] && (r !== 'reports' || canReports) ? r : 'dashboard';
     $('#login').classList.add('hidden'); $('#shell').classList.remove('hidden');
     $('#userName').textContent = sessionStorage.getItem('user');
     $('#pageTitle').textContent = titles[name];
@@ -825,10 +873,14 @@
     window.scrollTo(0, 0);
     $('#view').innerHTML = '<div class="muted" style="padding:60px;text-align:center">Loading…</div>';
     document.body.classList.add('nav-busy');
+    // Page content is hidden behind a spinner for at least 500ms, even when the data arrives sooner.
+    const view = $('#view'), minWait = new Promise(r => setTimeout(r, 500));
+    view.classList.add('holding');
     Api.init()
       .then(() => { if (myNav === navId) return pages[name](id); })
       .catch(handleErr)
-      .finally(() => { if (myNav === navId) document.body.classList.remove('nav-busy'); });
+      .then(() => minWait)
+      .finally(() => { if (myNav === navId) { view.classList.remove('holding'); document.body.classList.remove('nav-busy'); } });
   }
   function handleErr(e) {
     if (e instanceof Api.AuthError) { sessionStorage.removeItem('user'); Api.reset(); $('#lerr').textContent = 'Session expired — please sign in again.'; return showLogin(); }
@@ -848,7 +900,7 @@
     catch (err) { done(); return $('#lerr').textContent = 'Cannot reach the server. Try again.'; }
     done();
     if (!u) return $('#lerr').textContent = 'Invalid username or password.';
-    Api.reset(); $('#lp').value = ''; sessionStorage.setItem('user', u.Name); $('#lerr').textContent = ''; location.hash = '#/dashboard'; route();
+    Api.reset(); $('#lp').value = ''; sessionStorage.setItem('user', u.Name); sessionStorage.setItem('reports', u.Reports ? '1' : '0'); $('#lerr').textContent = ''; location.hash = '#/dashboard'; route();
   };
   $('#logoutBtn').onclick = async () => { await Api.logout(); sessionStorage.removeItem('user'); showLogin(); };
   $('#menuBtn').onclick = () => $('#side').classList.toggle('open');
@@ -864,5 +916,5 @@
     if (location.hash === a.getAttribute('href')) { e.preventDefault(); route(); }
   });
   // Restore the session from the 1-day cookie so a reload / new browser session doesn't ask for login again.
-  Api.me().then(u => { if (u) sessionStorage.setItem('user', u.Name); else sessionStorage.removeItem('user'); route(); }).catch(() => route());
+  Api.me().then(u => { if (u) { sessionStorage.setItem('user', u.Name); sessionStorage.setItem('reports', u.Reports ? '1' : '0'); } else sessionStorage.removeItem('user'); route(); }).catch(() => route());
 })();

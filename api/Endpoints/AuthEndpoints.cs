@@ -28,7 +28,7 @@ public static class AuthEndpoints
             await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
                 new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays(1) });
-            return Results.Ok(new { ID = u.ID, UserName = u.UserName, Name = u.Name, IsAdmin = u.IsAdmin == true });
+            return Results.Ok(new { ID = u.ID, UserName = u.UserName, Name = u.Name, IsAdmin = u.IsAdmin == true, Reports = ReportEndpoints.IsOwner(new ClaimsPrincipal(new ClaimsIdentity(claims, "x"))) });
         });
 
         g.MapPost("/logout", async (HttpContext ctx) =>
@@ -38,7 +38,7 @@ public static class AuthEndpoints
         });
 
         g.MapGet("/me", (ClaimsPrincipal p) => p.Identity?.IsAuthenticated == true
-            ? Results.Ok(new { UserName = p.Identity.Name, Name = p.FindFirstValue("display") })
+            ? Results.Ok(new { UserName = p.Identity.Name, Name = p.FindFirstValue("display"), Reports = ReportEndpoints.IsOwner(p) })
             : Results.Unauthorized());
     }
 }

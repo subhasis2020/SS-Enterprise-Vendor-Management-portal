@@ -8,7 +8,7 @@
   // Single source of truth for cache-busting - bump this whenever any js/css file changes, so browsers
   // don't keep serving a stale cached copy after a deploy. (Previously the stylesheet had its own separate
   // version string that went stale for several rounds of CSS edits - now everything shares this one.)
-  const ASSET_V = '2026100106';
+  const ASSET_V = '2026100109';
   document.write('<link rel="stylesheet" href="css/app.css?v=' + ASSET_V + '">');
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -38,6 +38,7 @@
       <a href="#/cheques" data-r="cheques"><i>&#10003;</i><span>Cheque details</span></a>
       <a href="#/expenses" data-r="expenses"><i>&#8722;</i><span>Expenses</span></a>
       <a href="#/products" data-r="products"><i>&#9737;</i><span>Products</span></a>
+      <a href="#/reports" data-r="reports" id="navReports" class="hidden"><i>&#8801;</i><span>Reports</span></a>
       <a href="#/todos" data-r="todos"><i>&#9745;</i><span>To-do</span></a>
     </nav>
     <div class="side-foot"><small>&copy; All rights reserved, Baidurya IT Services</small></div>

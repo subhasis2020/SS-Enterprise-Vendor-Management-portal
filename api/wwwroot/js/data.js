@@ -50,6 +50,7 @@
 
     vendors: () => get('/api/vendors'),
     vendor: id => get('/api/vendors/' + id),
+    report: (name, from, to) => get('/api/reports/' + name + qs({ from, to })),
     vendorCheques: () => get('/api/vendors/cheques'),
     createVendor: o => post('/api/vendors', o),
     updateVendor: (id, o) => post('/api/vendors/' + id + '/edit', o),

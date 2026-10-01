@@ -36,7 +36,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         o.Events.OnRedirectToLogin = c => { c.Response.StatusCode = 401; return Task.CompletedTask; };
         o.Events.OnRedirectToAccessDenied = c => { c.Response.StatusCode = 403; return Task.CompletedTask; };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(ReportEndpoints.Policy, p => p.RequireAuthenticatedUser().RequireAssertion(ctx => ReportEndpoints.IsOwner(ctx.User)));
 
 var app = builder.Build();
 
@@ -72,5 +73,6 @@ ProductEndpoints.Map(secured);
 ProductSyncEndpoints.Map(secured);
 ExpenseEndpoints.Map(secured);
 TodoEndpoints.Map(secured);
+ReportEndpoints.Map(secured);
 
 app.Run();
