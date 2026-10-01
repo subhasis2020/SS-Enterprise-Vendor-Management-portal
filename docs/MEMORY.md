@@ -1,0 +1,3 @@
+- [SS Portal overview](ss-portal-overview.md) — stack, DB access, dev-server/cache-busting quirks, intentional nav trimming
+- [SS Portal status](ss-portal-status.md) — live on bigmartsingur.in; 2026-10-01: owner-only Reports page (subhasis login), cheque entry/cheque dates, sale-table indexes, 500ms nav loader
+- [Deploy workflow](deploy-workflow.md) — auto publish + copy to Desktop\bigmart after every change; edit endpoints must be POST, host 403s PUT
