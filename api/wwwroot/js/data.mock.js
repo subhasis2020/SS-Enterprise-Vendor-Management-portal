@@ -23,7 +23,7 @@
   function partyLedger(bills, pays, dateKey, amtKey, payDate) {
     const rows = [
       ...bills.map(b => ({ id: b.ID, date: b[dateKey], time: b.InvoiceTime || b.BillTime || '', type: 'Invoice', ref: b.InvoiceNo || b.BillNo, debit: b[amtKey], credit: 0, due: b.DueDate, mode: null, cheque: null, notes: b.Notes || null })),
-      ...pays.map(p => ({ id: p.ID, date: p[payDate], time: p.PaymentTime || '', type: 'Payment', ref: p.PaymentMode + (p.ChequeNo ? ' #' + p.ChequeNo : ''), debit: 0, credit: p.PayAmount, mode: p.PaymentMode, cheque: p.ChequeNo || null, notes: null }))
+      ...pays.map(p => ({ id: p.ID, date: p[payDate], time: p.PaymentTime || '', type: 'Payment', ref: p.PaymentMode + (p.ChequeNo ? ' #' + p.ChequeNo : ''), debit: 0, credit: p.PayAmount, mode: p.PaymentMode, cheque: p.ChequeNo || null, notes: p.Notes || null }))
     ].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
     let bal = 0;
     rows.forEach(r => { bal += r.debit - r.credit; r.balance = bal; });
@@ -71,7 +71,7 @@
       const v = vendorStats();
       const supplierName = byId(M.TB_Supplier, 'ID');
       const recentCheques = M.TB_SupplierInvoicePayment.filter(p => p.PaymentMode === 'Cheque')
-        .map(p => ({ OrganizationName: (supplierName[p.SupplierID] || {}).OrganizationName || '', PayAmount: p.PayAmount, PaymentDate: p.PaymentDate, ChequeNo: p.ChequeNo, PaymentTime: p.PaymentTime }))
+        .map(p => ({ SupplierID: p.SupplierID, OrganizationName: (supplierName[p.SupplierID] || {}).OrganizationName || '', PayAmount: p.PayAmount, PaymentDate: p.PaymentDate, ChequeNo: p.ChequeNo, PaymentTime: p.PaymentTime }))
         .sort((a, b) => (b.PaymentDate + b.PaymentTime).localeCompare(a.PaymentDate + a.PaymentTime)).slice(0, 5);
       const expenseMtd = sum(M.TB_DailyExpense.filter(e => e.CreatedDate.startsWith(month)), e => e.Amount);
       const metro = v.find(x => (x.OrganizationName || '').toUpperCase() === 'METRO CASH AND CARRY');
@@ -79,6 +79,7 @@
         today: last, prev, mtdTotal: sum(mtd, x => x.TotalSale), mtdBills: sum(mtd, x => x.bills),
         vendorDue: sum(v, x => Math.max(0, x.outstanding)),
         metroDue: metro ? metro.outstanding : 0,
+        metroId: metro ? metro.ID : null,
         expenseMtd,
         daily: d.filter(x => x.SaleDate.startsWith(month)),
         recentCheques,
@@ -88,10 +89,10 @@
       const d = date || TODAY;
       const supplierName = byId(M.TB_Supplier, 'ID');
       const invoices = M.TB_SupplierInvoice.filter(i => i.InvoiceDate === d)
-        .map(i => ({ OrganizationName: (supplierName[i.SupplierID] || {}).OrganizationName || '', InvoiceNo: i.InvoiceNo, InvoiceTime: i.InvoiceTime, Amount: i.Amount }))
+        .map(i => ({ SupplierID: i.SupplierID, OrganizationName: (supplierName[i.SupplierID] || {}).OrganizationName || '', InvoiceNo: i.InvoiceNo, InvoiceTime: i.InvoiceTime, Amount: i.Amount }))
         .sort((a, b) => b.InvoiceTime.localeCompare(a.InvoiceTime));
       const payments = M.TB_SupplierInvoicePayment.filter(p => p.PaymentDate === d)
-        .map(p => ({ OrganizationName: (supplierName[p.SupplierID] || {}).OrganizationName || '', PaymentTime: p.PaymentTime, PayAmount: p.PayAmount, PaymentMode: p.PaymentMode }))
+        .map(p => ({ SupplierID: p.SupplierID, OrganizationName: (supplierName[p.SupplierID] || {}).OrganizationName || '', PaymentTime: p.PaymentTime, PayAmount: p.PayAmount, PaymentMode: p.PaymentMode }))
         .sort((a, b) => b.PaymentTime.localeCompare(a.PaymentTime));
       return tick({ invoices, payments });
     },

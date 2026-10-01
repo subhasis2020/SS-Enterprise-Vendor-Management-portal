@@ -11,7 +11,7 @@ public static class CustomerEndpoints
     record PaymentReq(int CustomerID, decimal PayAmount, string PaymentMode, string PaymentDate, string? ChequeNo, string? TransactionID, string? Notes);
 
     const string BillSql = "SELECT ID, CustomerID PartyID, BillNo Ref, BillDate Date, BillTime Time, Amount, DueDate Due, Notes FROM TB_CustomerCredit";
-    const string PaySql = "SELECT ID, CustomerID PartyID, PaymentDate Date, PaymentTime Time, PayAmount Amount, PaymentMode Mode, ChequeNo Cheque FROM TB_CustomerCreditPayment";
+    const string PaySql = "SELECT ID, CustomerID PartyID, PaymentDate Date, PaymentTime Time, PayAmount Amount, PaymentMode Mode, ChequeNo Cheque, Notes, CONVERT(varchar(10), CreatedDate, 23) EntryDate FROM TB_CustomerCreditPayment";
 
     public static async Task<List<object>> LoadStats(Db db)
     {

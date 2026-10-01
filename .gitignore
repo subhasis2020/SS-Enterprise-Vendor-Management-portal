@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# SS Portal: ASP.NET Data Protection keys (login-cookie secrets; must never be committed)
+api/keys/
+
+# Local publish output / deploy copies
+bm_pub/

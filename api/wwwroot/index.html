@@ -8,7 +8,7 @@
   // Single source of truth for cache-busting - bump this whenever any js/css file changes, so browsers
   // don't keep serving a stale cached copy after a deploy. (Previously the stylesheet had its own separate
   // version string that went stale for several rounds of CSS edits - now everything shares this one.)
-  const ASSET_V = '2026092926';
+  const ASSET_V = '2026100106';
   document.write('<link rel="stylesheet" href="css/app.css?v=' + ASSET_V + '">');
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -29,16 +29,16 @@
 
 <div id="shell" class="shell hidden">
   <aside class="side" id="side">
-    <div class="brand"><span class="logo">SS</span><div><b>SS Enterprise</b><small>Singur Bigmart</small></div></div>
+    <div class="brand"><span class="logo">SS</span><div class="brand-text"><b>SS Enterprise</b><small>Singur Bigmart</small></div><button class="collapse-btn" id="collapseBtn" type="button" aria-label="Collapse menu" title="Collapse menu">&#8249;</button></div>
     <nav id="nav">
-      <a href="#/dashboard" data-r="dashboard"><i>&#9636;</i>Dashboard</a>
-      <a href="#/sales" data-r="sales"><i>&#8377;</i>Sales</a>
-      <a href="#/trend" data-r="trend"><i>&#8599;</i>Sales by month</a>
-      <a href="#/vendors" data-r="vendors"><i>&#9874;</i>Vendor payments</a>
-      <a href="#/cheques" data-r="cheques"><i>&#10003;</i>Cheque details</a>
-      <a href="#/expenses" data-r="expenses"><i>&#8722;</i>Expenses</a>
-      <a href="#/products" data-r="products"><i>&#9737;</i>Products</a>
-      <a href="#/todos" data-r="todos"><i>&#9745;</i>To-do</a>
+      <a href="#/dashboard" data-r="dashboard"><i>&#9636;</i><span>Dashboard</span></a>
+      <a href="#/sales" data-r="sales"><i>&#8377;</i><span>Sales</span></a>
+      <a href="#/trend" data-r="trend"><i>&#8599;</i><span>Sales by month</span></a>
+      <a href="#/vendors" data-r="vendors"><i>&#9874;</i><span>Vendor payments</span></a>
+      <a href="#/cheques" data-r="cheques"><i>&#10003;</i><span>Cheque details</span></a>
+      <a href="#/expenses" data-r="expenses"><i>&#8722;</i><span>Expenses</span></a>
+      <a href="#/products" data-r="products"><i>&#9737;</i><span>Products</span></a>
+      <a href="#/todos" data-r="todos"><i>&#9745;</i><span>To-do</span></a>
     </nav>
     <div class="side-foot"><small>&copy; All rights reserved, Baidurya IT Services</small></div>
   </aside>

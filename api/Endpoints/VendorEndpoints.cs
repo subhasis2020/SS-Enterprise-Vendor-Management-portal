@@ -8,14 +8,18 @@ public static class VendorEndpoints
     record Supplier(int ID, string OrganizationName, string? GSTNO, string? PhoneNo, bool IsActive, string? Notes);
     record PaidRow(int PartyID, decimal Paid);
     record InvoiceReq(int SupplierID, string InvoiceNo, decimal Amount, string InvoiceDate, string? DueDate, string? Notes);
-    record PaymentReq(int SupplierID, decimal PayAmount, string PaymentMode, string PaymentDate, string? ChequeNo, string? TransactionID, string? Notes);
+    record PaymentReq(int SupplierID, decimal PayAmount, string PaymentMode, string PaymentDate, string? ChequeNo, string? TransactionID, string? Notes, string? EntryDate = null);
     record VendorEditReq(string OrganizationName, string? GSTNO, string? PhoneNo, string? Notes);
     record NewVendorReq(string OrganizationName, string? GSTNO, string? PhoneNo, string? Notes);
     record EditInvoiceReq(string InvoiceNo, decimal Amount, string InvoiceDate, string? DueDate, string? Notes);
-    record EditPaymentReq(decimal PayAmount, string PaymentMode, string PaymentDate, string? ChequeNo);
+    record EditPaymentReq(decimal PayAmount, string PaymentMode, string PaymentDate, string? ChequeNo, string? Notes, string? EntryDate = null);
+
+    // For a Cheque, PaymentDate holds the cheque date (mandatory); EntryDate is when it was recorded (stored in CreatedDate).
+    // For any other mode PaymentDate is simply the payment/entry date, as before.
+    const string ChequeDateRequired = "Cheque date is required for a cheque payment.";
 
     const string InvoiceSql = "SELECT ID, SupplierID PartyID, InvoiceNo Ref, InvoiceDate Date, InvoiceTime Time, Amount, DueDate Due, Notes FROM TB_SupplierInvoice";
-    const string PaySql = "SELECT ID, SupplierID PartyID, PaymentDate Date, PaymentTime Time, PayAmount Amount, PaymentMode Mode, ChequeNo Cheque FROM TB_SupplierInvoicePayment";
+    const string PaySql = "SELECT ID, SupplierID PartyID, PaymentDate Date, PaymentTime Time, PayAmount Amount, PaymentMode Mode, ChequeNo Cheque, Notes, CONVERT(varchar(10), CreatedDate, 23) EntryDate FROM TB_SupplierInvoicePayment";
 
     public static async Task<List<object>> LoadStats(Db db)
     {
@@ -97,6 +101,7 @@ public static class VendorEndpoints
             await c.ExecuteAsync(@"INSERT INTO TB_SupplierInvoice (SupplierID, InvoiceNo, InvoiceDate, InvoiceTime, Amount, Notes, DueDate, CreatedDate, CreatedBy, UpdatedDate, UpdatedBy)
                 VALUES (@SupplierID, @InvoiceNo, @InvoiceDate, @t, @Amount, @Notes, @DueDate, GETDATE(), @by, GETDATE(), @by)",
                 new { r.SupplierID, InvoiceNo = r.InvoiceNo.Trim(), r.InvoiceDate, t = Party.Now, r.Amount, r.Notes, DueDate = string.IsNullOrWhiteSpace(r.DueDate) ? null : r.DueDate, by });
+            DashboardEndpoints.Bust();
             return Results.Ok();
         });
 
@@ -109,27 +114,37 @@ public static class VendorEndpoints
             var by = u.Identity?.Name ?? "portal";
             var n = await c.ExecuteAsync(@"UPDATE TB_SupplierInvoice SET InvoiceNo=@InvoiceNo, Amount=@Amount, InvoiceDate=@InvoiceDate, DueDate=@DueDate, Notes=@Notes, UpdatedDate=GETDATE(), UpdatedBy=@by WHERE ID=@id",
                 new { id, InvoiceNo = r.InvoiceNo.Trim(), r.Amount, r.InvoiceDate, DueDate = string.IsNullOrWhiteSpace(r.DueDate) ? null : r.DueDate, r.Notes, by });
+            DashboardEndpoints.Bust();
             return n == 0 ? Results.NotFound() : Results.Ok();
         });
 
         g.MapPost("/vendors/payments", async (PaymentReq r, Db db, ClaimsPrincipal u) =>
         {
             if (r.PayAmount <= 0 || Party.ParseDate(r.PaymentDate) == DateTime.MinValue || string.IsNullOrWhiteSpace(r.PaymentMode)) return Results.BadRequest(new { error = "Amount, mode and date are required." });
+            if (r.PaymentMode == "Cheque" && string.IsNullOrWhiteSpace(r.PaymentDate)) return Results.BadRequest(new { error = ChequeDateRequired });
             await using var c = await db.OpenAsync();
             var by = u.Identity?.Name ?? "portal";
+            var entry = Party.ParseDate(r.EntryDate) is var e && e != DateTime.MinValue ? e.Date + DateTime.Now.TimeOfDay : DateTime.Now;
             await c.ExecuteAsync(@"INSERT INTO TB_SupplierInvoicePayment (SupplierID, PayAmount, PaymentMode, TransactionID, ChequeNo, PaymentDate, PaymentTime, Notes, CreatedDate, CreatedBy, UpdatedDate, UpdatedBy)
-                VALUES (@SupplierID, @PayAmount, @PaymentMode, @TransactionID, @ChequeNo, @PaymentDate, @t, @Notes, GETDATE(), @by, GETDATE(), @by)",
-                new { r.SupplierID, r.PayAmount, r.PaymentMode, r.TransactionID, r.ChequeNo, r.PaymentDate, t = Party.Now, r.Notes, by });
+                VALUES (@SupplierID, @PayAmount, @PaymentMode, @TransactionID, @ChequeNo, @PaymentDate, @t, @Notes, @entry, @by, GETDATE(), @by)",
+                new { r.SupplierID, r.PayAmount, r.PaymentMode, r.TransactionID, r.ChequeNo, r.PaymentDate, t = Party.Now, r.Notes, entry, by });
+            DashboardEndpoints.Bust();
             return Results.Ok();
         });
 
         g.MapPost("/vendors/payments/{id:int}/edit", async (int id, EditPaymentReq r, Db db, ClaimsPrincipal u) =>
         {
+            if (r.PaymentMode == "Cheque" && string.IsNullOrWhiteSpace(r.PaymentDate)) return Results.BadRequest(new { error = ChequeDateRequired });
             if (r.PayAmount <= 0 || Party.ParseDate(r.PaymentDate) == DateTime.MinValue || string.IsNullOrWhiteSpace(r.PaymentMode)) return Results.BadRequest(new { error = "Amount, mode and date are required." });
             await using var c = await db.OpenAsync();
             var by = u.Identity?.Name ?? "portal";
-            var n = await c.ExecuteAsync(@"UPDATE TB_SupplierInvoicePayment SET PayAmount=@PayAmount, PaymentMode=@PaymentMode, ChequeNo=@ChequeNo, PaymentDate=@PaymentDate, UpdatedDate=GETDATE(), UpdatedBy=@by WHERE ID=@id",
-                new { id, r.PayAmount, r.PaymentMode, ChequeNo = r.PaymentMode == "Cheque" ? r.ChequeNo : null, r.PaymentDate, by });
+            // Move CreatedDate to the chosen entry date but keep its time of day; no EntryDate sent = leave it alone.
+            DateTime? entry = Party.ParseDate(r.EntryDate) is var e && e != DateTime.MinValue ? e.Date : null;
+            var n = await c.ExecuteAsync(@"UPDATE TB_SupplierInvoicePayment SET PayAmount=@PayAmount, PaymentMode=@PaymentMode, ChequeNo=@ChequeNo, PaymentDate=@PaymentDate, Notes=@Notes,
+                CreatedDate = CASE WHEN @entry IS NULL THEN CreatedDate ELSE DATEADD(day, DATEDIFF(day, CAST(CreatedDate AS date), @entry), CreatedDate) END,
+                UpdatedDate=GETDATE(), UpdatedBy=@by WHERE ID=@id",
+                new { id, r.PayAmount, r.PaymentMode, ChequeNo = r.PaymentMode == "Cheque" ? r.ChequeNo : null, r.PaymentDate, r.Notes, entry, by });
+            DashboardEndpoints.Bust();
             return n == 0 ? Results.NotFound() : Results.Ok();
         });
     }

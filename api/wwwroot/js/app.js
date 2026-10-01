@@ -16,6 +16,15 @@
   const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark' || (!document.documentElement.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
   $('#themeBtn').onclick = () => { const t = isDark() ? 'light' : 'dark'; applyTheme(t); store.set('theme', t); route(); };
 
+  /* ---------- sidebar collapse ---------- */
+  const applyCollapsed = v => $('#shell').classList.toggle('collapsed', v);
+  applyCollapsed(store.get('sideCollapsed') === '1');
+  $('#collapseBtn').onclick = () => {
+    const v = !$('#shell').classList.contains('collapsed');
+    applyCollapsed(v);
+    store.set('sideCollapsed', v ? '1' : '0');
+  };
+
   /* ---------- ui helpers ---------- */
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2200); }
   function modal(html, wide) { $('#modalCard').className = 'modal-card' + (wide ? ' wide' : ''); $('#modalCard').innerHTML = html; $('#modal').classList.remove('hidden'); }
@@ -43,10 +52,10 @@
     };
   }
   function chart(id, cfg) { const c = new Chart($('#' + id), cfg); charts.push(c); return c; }
-  const killCharts = () => { charts.forEach(c => c.destroy()); charts = []; };
+  const killCharts = () => { charts.forEach(c => { try { c.destroy(); } catch { } }); charts = []; };
   function redrawChart(id, cfg) {
-    const i = charts.findIndex(c => c.canvas.id === id);
-    if (i >= 0) { charts[i].destroy(); charts.splice(i, 1); }
+    const i = charts.findIndex(c => c.canvas && c.canvas.id === id);
+    if (i >= 0) { try { charts[i].destroy(); } catch { } charts.splice(i, 1); }
     return chart(id, cfg);
   }
   const compactInr = n => n >= 1e5 ? '₹' + (n / 1e5).toFixed(1) + 'L' : n >= 1e3 ? '₹' + (n / 1e3).toFixed(1) + 'k' : '₹' + Math.round(n);
@@ -83,12 +92,12 @@
         <button class="on" data-tab="pay">Payments made (${va.payments.length})</button>
       </div>
       <div class="hidden" data-panel="inv"><div class="table-wrap"><table><thead><tr><th>Vendor</th><th>Invoice no.</th><th>Time</th><th class="num">Amount</th></tr></thead><tbody>
-        ${va.invoices.map(i => `<tr><td class="caps">${esc(i.OrganizationName)}</td><td>${esc(i.InvoiceNo)}</td><td>${esc(i.InvoiceTime)}</td><td class="num neg"><b>${inr2(i.Amount)}</b></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No invoices added on this date.</td></tr>'}
+        ${va.invoices.map(i => `<tr class="click" data-v="${i.SupplierID}"><td class="wrap caps">${esc(i.OrganizationName)}</td><td>${esc(i.InvoiceNo)}</td><td>${esc(i.InvoiceTime)}</td><td class="num neg"><b>${inr2(i.Amount)}</b></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No invoices added on this date.</td></tr>'}
       </tbody></table></div></div>
       <div data-panel="pay">
         <div class="chips"><div class="chip"><b>${inr2(payTotal)}</b><span>total payment</span></div><div class="chip"><b>${inr2(payCash)}</b><span>cash payment</span></div><div class="chip"><b>${inr2(payOnline)}</b><span>online payment</span></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Vendor</th><th>Time</th><th class="num">Amount</th><th>Mode</th></tr></thead><tbody>
-        ${va.payments.map(p => `<tr><td class="caps">${esc(p.OrganizationName)}</td><td>${esc(p.PaymentTime)}</td><td class="num pos"><b>${inr2(p.PayAmount)}</b></td><td>${esc(p.PaymentMode)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No payments made on this date.</td></tr>'}
+        <div class="table-wrap"><table><thead><tr><th>Vendor</th><th>Time</th><th>Mode</th><th class="num">Amount</th></tr></thead><tbody>
+        ${va.payments.map(p => `<tr class="click" data-v="${p.SupplierID}"><td class="wrap caps">${esc(p.OrganizationName)}</td><td>${esc(p.PaymentTime)}</td><td>${esc(p.PaymentMode)}</td><td class="num pos"><b>${inr2(p.PayAmount)}</b></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No payments made on this date.</td></tr>'}
         </tbody></table></div>
       </div>`;
   }
@@ -97,6 +106,7 @@
       $$('#vaCard .tabbar button').forEach(x => x.classList.toggle('on', x === b));
       $$('#vaCard [data-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== b.dataset.tab));
     });
+    $$('#vaCard tr[data-v]').forEach(tr => tr.onclick = () => location.hash = '#/vendors/' + tr.dataset.v);
   }
   async function loadVendorActivity(date) {
     const va = await Api.vendorActivity(date);
@@ -127,17 +137,17 @@
     const chg = d.prev ? (d.today.TotalSale - d.prev.TotalSale) / d.prev.TotalSale * 100 : 0;
     $('#view').innerHTML = `
       <div class="grid kpis">
-        <div class="card kpi accent"><div class="label">Today's sales</div><div class="val">${inr(d.today.TotalSale)}</div><div class="delta ${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg).toFixed(1)}% vs previous day</div></div>
-        <div class="card kpi"><div class="label">Month to date</div><div class="val">${inr(d.mtdTotal)}</div><div class="delta">${num(d.mtdBills)} bills</div></div>
-        <div class="card kpi"><div class="label">Expenses</div><div class="val">${inr(d.expenseMtd)}</div><div class="delta">this month</div></div>
-        <div class="card kpi"><div class="label">Vendor dues</div><div class="val">${inr(d.vendorDue)}</div><div class="delta">outstanding</div></div>
-        <div class="card kpi"><div class="label">Metro Cash &amp; Carry</div><div class="val neg">${inr(d.metroDue)}</div><div class="delta">vendor due</div></div>
+        <div class="card kpi accent click" data-nav="sales"><div class="label">Today's sales</div><div class="val">${inr(d.today.TotalSale)}</div><div class="delta ${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg).toFixed(1)}% vs previous day</div></div>
+        <div class="card kpi click" data-nav="vendorDue"><div class="label">Vendor dues</div><div class="val neg">${inr(d.vendorDue)}</div><div class="delta">outstanding</div></div>
+        <div class="card kpi click" data-nav="mtd"><div class="label">Month to date</div><div class="val">${inr(d.mtdTotal)}</div><div class="delta">${num(d.mtdBills)} bills</div></div>
+        <div class="card kpi click" data-nav="expenses"><div class="label">Expenses</div><div class="val">${inr(d.expenseMtd)}</div><div class="delta">this month</div></div>
+        <div class="card kpi${d.metroId ? ' click' : ''}" data-nav="metro"><div class="label">Metro Cash &amp; Carry</div><div class="val neg">${inr(d.metroDue)}</div><div class="delta">vendor due</div></div>
       </div>
       ${openTodos.length ? `
       <div class="card">
         <div class="toolbar" style="margin-bottom:0"><div class="grow"><h3>To-do</h3><div class="sub">${openTodos.length} open</div></div><div class="end"><button class="btn sm" id="ntDash">+ Task</button></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Task</th><th>Due date</th><th>Done</th></tr></thead><tbody>
-        ${openTodos.map(t => `<tr><td class="wrap">${esc(t.Title)}${dotIfToday(t)}</td><td>${fmtDate(t.DueDate)}</td><td><input type="checkbox" data-dtoggle="${t.ID}"></td></tr>`).join('')}
+        <div class="table-wrap"><table><thead><tr><th>Task</th><th>Due date</th><th>Notes</th><th class="chk">Done</th></tr></thead><tbody>
+        ${openTodos.map(t => `<tr class="click" data-edit="${t.ID}"><td class="wrap">${esc(t.Title)}${dotIfToday(t)}</td><td>${fmtDate(t.DueDate)}</td><td class="wrap sm muted">${esc(t.Notes || '—')}</td><td class="chk"><input type="checkbox" data-dtoggle="${t.ID}"></td></tr>`).join('')}
         </tbody></table></div>
         <a class="back" style="margin:12px 0 0" href="#/todos">View all tasks →</a>
       </div>` : ''}
@@ -146,13 +156,13 @@
         <div id="vaCard">${vendorActivityPanels(va)}</div>
       </div>
       <div class="card" style="margin-top:16px">
-        <h3>Last cheques</h3><div class="sub">Most recent cheque payments recorded</div>
+        <div class="toolbar" style="margin-bottom:0"><div class="grow"><h3>Last cheques</h3><div class="sub">Cheque date in the last 5 days or upcoming</div></div></div>
         <div class="table-wrap"><table><thead><tr><th>Vendor</th><th>Cheque no.</th><th>Date</th><th class="num">Amount</th></tr></thead><tbody>
-          ${d.recentCheques.map(x => `<tr><td class="caps">${esc(x.OrganizationName)}</td><td>${esc(x.ChequeNo || '—')}</td><td>${fmtDate(x.PaymentDate)}</td><td class="num">${inr2(x.PayAmount)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No cheque payments recorded.</td></tr>'}
+          ${d.recentCheques.map(x => `<tr class="click" data-v="${x.SupplierID}"><td class="wrap caps">${esc(x.OrganizationName)}</td><td>${esc(x.ChequeNo || '—')}</td><td>${fmtDate(x.PaymentDate)}</td><td class="num pos"><b>${inr2(x.PayAmount)}</b></td></tr>`).join('') || '<tr><td colspan="4" class="muted">No cheques dated in the last 5 days or upcoming.</td></tr>'}
         </tbody></table></div>
         <a class="back" style="margin:12px 0 0" href="#/cheques">View all cheque details →</a>
       </div>
-      <div class="card" style="margin-top:16px"><h3>Daily sales</h3><div class="sub">This month · one row per bill (duplicates in TB_Sale removed)</div><div class="chart-box tall"><canvas id="c1"></canvas></div></div>
+      <div class="card" style="margin-top:16px"><h3>Daily sales</h3><div class="sub">Last 30 days · one row per bill (duplicates in TB_Sale removed)</div><div class="chart-box tall"><canvas id="c1"></canvas></div></div>
       <div class="card" style="margin-top:16px">
         <div class="toolbar" style="margin-bottom:0"><div class="grow"><h3>Vendor payments by month</h3><div class="sub" id="vpYearLabel">${st.vpYear}</div></div><label style="flex:0 0 auto">Year<select id="vpYear">${vpYears.map(y => `<option value="${y}" ${y === st.vpYear ? 'selected' : ''}>${y}</option>`).join('')}</select></label></div>
         <div class="chart-box tall"><canvas id="c2"></canvas></div>
@@ -175,10 +185,21 @@
     };
     if ($('#ntDash')) $('#ntDash').onclick = () => todoModal();
     $$('[data-dtoggle]').forEach(cb => cb.onclick = e => {
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       const t = openTodos.find(x => x.ID === +cb.dataset.dtoggle);
       confirmModal(`Mark "${t.Title}" as done?`, async () => { await Api.toggleTodo(t.ID); pages.dashboard(); });
     });
+    $$('#view .card tr[data-edit]').forEach(tr => tr.onclick = () => todoModal(openTodos.find(t => t.ID === +tr.dataset.edit)));
+    $$('[data-nav]').forEach(card => card.onclick = () => {
+      switch (card.dataset.nav) {
+        case 'sales': location.hash = '#/sales'; break;
+        case 'mtd': location.hash = '#/trend/' + Api.TODAY.slice(0, 7); break;
+        case 'expenses': location.hash = '#/expenses'; break;
+        case 'vendorDue': pages.vendors.st = { q: '', only: true, page: 1 }; location.hash = '#/vendors'; break;
+        case 'metro': if (d.metroId) location.hash = '#/vendors/' + d.metroId; break;
+      }
+    });
+    $$('tr[data-v]').forEach(tr => tr.onclick = () => location.hash = '#/vendors/' + tr.dataset.v);
   };
 
   function monthLabel(m) { return new Date(m + '-01').toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }); }
@@ -364,8 +385,9 @@
       () => Api.addExpense({ Amount: +$('#m_amt').value, PaymentMode: $('#m_mode').value, Notes: $('#m_notes').value || null, ChequeNo: $('#m_mode').value === 'Cheque' ? $('#m_ref').value : null, TransactionID: $('#m_mode').value !== 'Cheque' ? $('#m_ref').value : null }));
   }
 
-  const isDueToday = d => d === Api.TODAY;
-  const dotIfToday = t => !t.IsDone && isDueToday(t.DueDate) ? '<span class="blink-dot" title="Due today"></span>' : '';
+  // Blinks for an open task that is due today or already overdue.
+  const isDueOrOverdue = d => !!d && String(d).slice(0, 10) <= Api.TODAY;
+  const dotIfToday = t => !t.IsDone && isDueOrOverdue(t.DueDate) ? `<span class="blink-dot" title="${String(t.DueDate).slice(0, 10) < Api.TODAY ? 'Overdue' : 'Due today'}"></span>` : '';
   function confirmModal(msg, onYes) {
     modal(`<h3>Are you sure?</h3><p class="muted">${esc(msg)}</p><div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="cfYes">Yes</button></div>`);
     $('#cfYes').onclick = async () => { closeModal(); await onYes(); };
@@ -388,12 +410,12 @@
         <label style="flex:0 0 auto;display:flex;gap:6px;align-items:center;padding-bottom:9px"><input type="checkbox" id="showDone" style="width:auto;margin:0" ${st.showDone ? 'checked' : ''}> Show completed</label>
         <div class="end"><button class="btn primary" id="nt">+ Task</button></div>
       </div>
-      <div class="card"><div class="table-wrap"><table><thead><tr><th>Task</th><th>Due date</th><th>Notes</th><th>Done</th><th></th></tr></thead><tbody>
+      <div class="card"><div class="table-wrap"><table><thead><tr><th>Task</th><th>Due date</th><th>Notes</th><th class="chk">Done</th><th></th></tr></thead><tbody>
       ${rows.map(t => `<tr${t.IsDone ? ' class="muted"' : ''}>
         <td class="wrap click" data-edit="${t.ID}">${t.IsDone ? `<s>${esc(t.Title)}</s>` : esc(t.Title)}${dotIfToday(t)}</td>
         <td>${fmtDate(t.DueDate)}</td>
-        <td class="wrap muted">${esc(t.Notes || '—')}</td>
-        <td><input type="checkbox" data-toggle="${t.ID}" ${t.IsDone ? 'checked' : ''}></td>
+        <td class="wrap sm muted">${esc(t.Notes || '—')}</td>
+        <td class="chk"><input type="checkbox" data-toggle="${t.ID}" ${t.IsDone ? 'checked' : ''}></td>
         <td><button class="btn sm" data-edit="${t.ID}">Edit</button> <button class="btn sm" data-del="${t.ID}">Delete</button></td>
       </tr>`).join('') || '<tr><td colspan="5" class="muted">No tasks.</td></tr>'}
       </tbody></table></div></div>`;
@@ -410,7 +432,8 @@
 
   const payFields = (today) => `
     <div class="row2"><label>Amount (₹)<input type="number" id="m_amt" min="1" step="0.01" required></label><label id="m_datewrap">Date<input type="date" id="m_date" value="${today}" required></label></div>
-    <div class="row2"><label>Payment mode<select id="m_mode"><option>Cash</option><option>UPI</option><option>Cheque</option><option>Card</option></select></label><label>Cheque / Ref no.<input id="m_ref"></label></div>`;
+    <div class="row2"><label>Payment mode<select id="m_mode"><option>Cash</option><option>UPI</option><option>Cheque</option><option>Card</option></select></label><label>Cheque / Ref no.<input id="m_ref"></label></div>
+    <label>Notes<textarea id="m_notes" rows="2" placeholder="Optional"></textarea></label>`;
   function formModal(title, body, onOk) {
     modal(`<h3>${title}</h3><form id="mf">${body}<div class="modal-actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Save</button></div></form>`);
     $('#mf').onsubmit = async e => {
@@ -459,12 +482,28 @@
       <label>Notes<textarea id="m_notes" rows="2" placeholder="Optional"></textarea></label>`,
       () => Api.addInvoice({ SupplierID: vid, InvoiceNo: $('#m_no').value, Amount: +$('#m_amt').value, InvoiceDate: $('#m_date').value, DueDate: $('#m_due').value || null, Notes: $('#m_notes').value || null }));
   }
+  // Vendor payment form: Cash/UPI/Card use one date; Cheque adds a mandatory (initially empty) cheque date next to the entry date.
+  const vendorPayFields = (entry, mode, chq, ref, amt, notes) => {
+    const opt = m => `<option ${mode === m ? 'selected' : ''}>${m}</option>`;
+    return `<div class="row2"><label>Amount (₹)<input type="number" id="m_amt" min="1" step="0.01" value="${amt}" required></label><label>Entry date<input type="date" id="m_entry" value="${entry}" required></label></div>
+    <div class="row2"><label>Payment mode<select id="m_mode">${opt('Cash')}${opt('UPI')}${opt('Cheque')}${opt('Card')}</select></label><label>Cheque / Ref no.<input id="m_ref" value="${esc(ref)}"></label></div>
+    <label id="m_chqwrap">Cheque date<input type="date" id="m_chq" value="${chq}"></label>
+    <label>Notes<textarea id="m_notes" rows="2" placeholder="Optional">${esc(notes)}</textarea></label>`;
+  };
+  function wireVendorPay() {
+    const sync = () => { const c = $('#m_mode').value === 'Cheque'; $('#m_chqwrap').classList.toggle('hidden', !c); $('#m_chq').required = c; };
+    $('#m_mode').onchange = sync; sync();
+  }
+  const vendorPayBody = isCheque => ({
+    PayAmount: +$('#m_amt').value, PaymentMode: $('#m_mode').value, EntryDate: $('#m_entry').value,
+    PaymentDate: isCheque ? $('#m_chq').value : $('#m_entry').value,
+    ChequeNo: isCheque ? $('#m_ref').value : null, Notes: $('#m_notes').value || null
+  });
   function vendorPayModal(vid) {
     const vname = (Api.suppliers().find(s => s.ID === vid) || {}).OrganizationName || '';
-    formModal('Record vendor payment', `<label>Vendor<input class="caps" value="${esc(vname)}" disabled></label>${payFields(Api.TODAY)}`,
-      () => Api.addVendorPayment({ SupplierID: vid, PayAmount: +$('#m_amt').value, PaymentMode: $('#m_mode').value, ChequeNo: $('#m_mode').value === 'Cheque' ? $('#m_ref').value : null, PaymentDate: $('#m_date').value }));
-    const relabel = () => { $('#m_datewrap').firstChild.textContent = $('#m_mode').value === 'Cheque' ? 'Cheque date' : 'Date'; };
-    $('#m_mode').onchange = relabel; relabel();
+    formModal('Record vendor payment', `<label>Vendor<input class="caps" value="${esc(vname)}" disabled></label>${vendorPayFields(Api.TODAY, 'Cash', '', '', '', '')}`,
+      () => Api.addVendorPayment({ SupplierID: vid, ...vendorPayBody($('#m_mode').value === 'Cheque') }));
+    wireVendorPay();
   }
   function vendorCreateModal() {
     formModal('New vendor', `<label>Organization name<input class="caps" id="m_name" required></label>
@@ -489,11 +528,10 @@
       () => Api.updateInvoice(row.id, { InvoiceNo: $('#m_no').value, Amount: +$('#m_amt').value, InvoiceDate: $('#m_date').value, DueDate: $('#m_due').value || null, Notes: $('#m_notes').value || null }));
   }
   function txnPaymentEditModal(row) {
-    const opt = m => `<option ${row.mode === m ? 'selected' : ''}>${m}</option>`;
-    formModal('Edit payment', `
-      <div class="row2"><label>Amount (₹)<input type="number" id="m_amt" min="1" step="0.01" value="${row.credit}" required></label><label>Date<input type="date" id="m_date" value="${row.date}" required></label></div>
-      <div class="row2"><label>Payment mode<select id="m_mode">${opt('Cash')}${opt('UPI')}${opt('Cheque')}${opt('Card')}</select></label><label>Cheque / Ref no.<input id="m_ref" value="${esc(row.cheque || '')}"></label></div>`,
-      () => Api.updateVendorPayment(row.id, { PayAmount: +$('#m_amt').value, PaymentMode: $('#m_mode').value, PaymentDate: $('#m_date').value, ChequeNo: $('#m_mode').value === 'Cheque' ? $('#m_ref').value : null }));
+    const cheque = row.mode === 'Cheque';
+    formModal('Edit payment', vendorPayFields(row.entryDate || row.date, row.mode, cheque ? row.date : '', row.cheque || '', row.credit, row.notes || ''),
+      () => Api.updateVendorPayment(row.id, vendorPayBody($('#m_mode').value === 'Cheque')));
+    wireVendorPay();
   }
   async function vendorLedger(id) {
     const d = await Api.vendor(id);
@@ -510,15 +548,15 @@
   function ledgerTable(rows, debitLabel, cfg) {
     cfg = cfg || {};
     const head = cfg.compact
-      ? `<th>Date</th><th>Type</th><th>Reference</th><th class="num">Amount</th><th class="num">Balance</th>`
-      : `<th>Date</th><th>Type</th><th>Reference</th><th>Due</th><th class="num">${debitLabel}</th><th class="num">Payment</th><th class="num">Balance</th>`;
+      ? `<th>Date</th><th>Type</th><th>Reference</th><th>Notes</th><th class="num">Amount</th><th class="num">Balance</th>`
+      : `<th>Date</th><th>Type</th><th>Reference</th><th>Notes</th><th>Due</th><th class="num">${debitLabel}</th><th class="num">Payment</th><th class="num">Balance</th>`;
     const editAttrs = r => cfg.editable ? `class="click" data-edit="${r.id}" data-type="${r.type}"` : '';
-    const refCell = r => `${esc(r.ref)}${r.notes ? `<br><small class="muted">${esc(r.notes)}</small>` : ''}`;
+    const notesCell = r => `<td class="wrap sm muted">${r.notes ? esc(r.notes) : ''}</td>`;
     const row = r => cfg.compact
-      ? `<tr ${editAttrs(r)}><td>${fmtDate(r.date)} ${esc(r.time)}</td><td><span class="pill ${r.type === 'Payment' ? 'good' : ''}">${r.type}</span></td><td>${refCell(r)}</td><td class="num ${r.debit ? 'neg' : 'pos'}">${inr2(r.debit || r.credit)}</td><td class="num neg"><b>${inr2(r.balance)}</b></td></tr>`
-      : `<tr ${editAttrs(r)}><td>${fmtDate(r.date)} ${esc(r.time)}</td><td><span class="pill ${r.type === 'Payment' ? 'good' : ''}">${r.type}</span></td><td>${refCell(r)}</td><td>${r.due ? fmtDate(r.due) : ''}</td><td class="num ${cfg.colorize && r.debit ? 'neg' : ''}">${r.debit ? inr2(r.debit) : ''}</td><td class="num ${cfg.colorize && r.credit ? 'pos' : ''}">${r.credit ? inr2(r.credit) : ''}</td><td class="num ${cfg.colorize ? 'neg' : ''}"><b>${inr2(r.balance)}</b></td></tr>`;
+      ? `<tr ${editAttrs(r)}><td>${fmtDate(r.date)} ${esc(r.time)}</td><td><span class="pill ${r.type === 'Payment' ? 'good' : ''}">${r.type}</span></td><td>${esc(r.ref)}</td>${notesCell(r)}<td class="num ${r.debit ? 'neg' : 'pos'}">${inr2(r.debit || r.credit)}</td><td class="num neg"><b>${inr2(r.balance)}</b></td></tr>`
+      : `<tr ${editAttrs(r)}><td>${fmtDate(r.date)} ${esc(r.time)}</td><td><span class="pill ${r.type === 'Payment' ? 'good' : ''}">${r.type}</span></td><td>${esc(r.ref)}</td>${notesCell(r)}<td>${r.due ? fmtDate(r.due) : ''}</td><td class="num ${cfg.colorize && r.debit ? 'neg' : ''}">${r.debit ? inr2(r.debit) : ''}</td><td class="num ${cfg.colorize && r.credit ? 'pos' : ''}">${r.credit ? inr2(r.credit) : ''}</td><td class="num ${cfg.colorize ? 'neg' : ''}"><b>${inr2(r.balance)}</b></td></tr>`;
     return `<div class="card">${cfg.editable ? '<div class="sub">Click a row to fix a wrong entry</div>' : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>
-    ${[...rows].reverse().map(row).join('') || `<tr><td colspan="${cfg.compact ? 5 : 7}" class="muted">No transactions.</td></tr>`}
+    ${[...rows].reverse().map(row).join('') || `<tr><td colspan="${cfg.compact ? 6 : 8}" class="muted">No transactions.</td></tr>`}
     </tbody></table></div></div>`;
   }
 
@@ -550,7 +588,7 @@
   }
   function custPayModal(cid) {
     formModal('Payment received', `<label>Customer<select id="m_c">${opts(Api.customerList(), 'ID', 'Name', cid)}</select></label>${payFields(Api.TODAY)}`,
-      () => Api.addCustomerPayment({ CustomerID: +$('#m_c').value, PayAmount: +$('#m_amt').value, PaymentMode: $('#m_mode').value, PaymentDate: $('#m_date').value }));
+      () => Api.addCustomerPayment({ CustomerID: +$('#m_c').value, PayAmount: +$('#m_amt').value, PaymentMode: $('#m_mode').value, PaymentDate: $('#m_date').value, Notes: $('#m_notes').value || null }));
   }
   async function customerLedger(id) {
     const d = await Api.customer(id);
@@ -772,8 +810,10 @@
 
   /* ---------- router / auth ---------- */
   const titles = { dashboard: 'Dashboard', todos: 'To-do', sales: 'Sales', trend: 'Sales by month', vendors: 'Vendor payments', cheques: 'Cheque details', customers: 'Customer credit', expenses: 'Expenses', products: 'Products', sync: 'Product sync', profit: 'Monthly profit' };
+  let navId = 0;
   function route() {
     if (!sessionStorage.getItem('user')) return showLogin();
+    const myNav = ++navId;
     const [r, id] = (location.hash.replace(/^#\//, '') || 'dashboard').split('/');
     const name = pages[r] ? r : 'dashboard';
     $('#login').classList.add('hidden'); $('#shell').classList.remove('hidden');
@@ -782,8 +822,13 @@
     $$('#nav a').forEach(a => a.classList.toggle('on', a.dataset.r === name));
     $('#side').classList.remove('open');
     killCharts();
+    window.scrollTo(0, 0);
     $('#view').innerHTML = '<div class="muted" style="padding:60px;text-align:center">Loading…</div>';
-    Api.init().then(() => pages[name](id)).catch(handleErr);
+    document.body.classList.add('nav-busy');
+    Api.init()
+      .then(() => { if (myNav === navId) return pages[name](id); })
+      .catch(handleErr)
+      .finally(() => { if (myNav === navId) document.body.classList.remove('nav-busy'); });
   }
   function handleErr(e) {
     if (e instanceof Api.AuthError) { sessionStorage.removeItem('user'); Api.reset(); $('#lerr').textContent = 'Session expired — please sign in again.'; return showLogin(); }
@@ -808,6 +853,16 @@
   $('#logoutBtn').onclick = async () => { await Api.logout(); sessionStorage.removeItem('user'); showLogin(); };
   $('#menuBtn').onclick = () => $('#side').classList.toggle('open');
   addEventListener('hashchange', route);
+  // Clicking a menu item always starts that page fresh, even if it's already the current hash (no hashchange fires then).
+  // Also drops that page's remembered filters / page number, so tables return to page 1 with default filters.
+  $('#nav').addEventListener('click', e => {
+    const a = e.target.closest('a[href^="#/"]');
+    if (!a) return;
+    const r = a.dataset.r;
+    if (pages[r]) delete pages[r].st;
+    if (r === 'products') delete productList.st;
+    if (location.hash === a.getAttribute('href')) { e.preventDefault(); route(); }
+  });
   // Restore the session from the 1-day cookie so a reload / new browser session doesn't ask for login again.
   Api.me().then(u => { if (u) sessionStorage.setItem('user', u.Name); else sessionStorage.removeItem('user'); route(); }).catch(() => route());
 })();
